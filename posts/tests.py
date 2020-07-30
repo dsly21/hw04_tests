@@ -8,12 +8,7 @@ class Test(TestCase):
     def setUp(self):
         self.test_user = User.objects.create_user(
                                 username="test_user",
-                                email="test@test.com",
-                                password="123452")
-
-        self.new_post = Post.objects.create(
-                            text='some text',
-                            author=self.test_user)
+                                email="test@test.com",)
 
         self.new_group = Group.objects.create(
                             title="test_group",
@@ -24,33 +19,57 @@ class Test(TestCase):
         self.client = Client()
         self.client.force_login(self.test_user)
 
-    def get_url(self, post, group):
+    def get_url(self, post, group, user):
         urls = [reverse('index'),
 
                 reverse('profile', kwargs={
-                        'username': self.test_user.username}),
+                        'username': user.username}),
 
                 reverse('post', kwargs={
                         'username': self.test_user.username,
-                        'post_id': post.id})]
+                        'post_id': post.id}),
+
+                reverse('group_posts',
+                        kwargs={'slug': group.slug})]
+
         return urls
 
+    def requests_and_checks(self, url, group, user, text):
+        response = self.client.get(url)
+        if 'paginator' in response.context:
+            current_post = response.context['paginator'].object_list.first()
+        else:
+            current_post = response.context['post']
+        self.assertEqual(current_post.text, text, msg='check text failed')
+        self.assertEqual(current_post.group, group, msg='check group failed')
+        self.assertEqual(current_post.author, user, msg='check autor failed')
+
     def test_profile(self):
-        response = self.client.get('/test_user/')
-        self.assertEqual(response.status_code, 200, msg='status code')
+        response = self.client.get(reverse('profile', kwargs={
+                        'username': self.test_user.username}))
+
+        self.assertEqual(response.status_code, 200, msg='status code failed')
 
         self.assertContains(response, self.test_user,
-                            msg_prefix='check create profile')
+                            msg_prefix='check profile failed')
 
     def test_new_post_auth_user(self):
         data = {'text': 'test_text', 'group': self.new_group.id}
 
-        response = self.client.post(reverse('new_post'), data)
-        self.assertEqual(response.status_code, 302, msg='redirect check')
+        response = self.client.post(reverse('new_post'), data, follow=True)
+        self.assertEqual(response.status_code, 200, msg='redirect check')
 
-        response = self.client.get('')
-        self.assertContains(response, 'test_text', status_code=200,
-                            msg_prefix='check new post in index page')
+        post = Post.objects.all()
+        self.assertEqual(len(post), 1, msg='count posts > 1')
+        post = Post.objects.first()
+
+        urls = self.get_url(post=post, group=post.group, user=post.author)
+        for url in urls:
+            self.requests_and_checks(
+                                    url=url,
+                                    group=post.group,
+                                    user=post.author,
+                                    text=post.text)
 
     def test_new_post_not_auth(self):
         data = {'text': 'test_text', 'group': self.new_group.id}
@@ -62,14 +81,24 @@ class Test(TestCase):
 
         self.assertRedirects(response, url, status_code=302,
                              target_status_code=200,
-                             msg_prefix='redirect user, if he is\'t auth')
+                             msg_prefix='redirect user failed')
 
-    def test_post_view(self):
-        for url in self.get_url(post=self.new_post, group=self.new_group):
-            response = self.client.get(url)
+        post = Post.objects.all()
+        self.assertEqual(len(post), 0, msg='post created')
 
-            self.assertContains(response, self.new_post.text,
-                                msg_prefix='check new post in all pages')
+    def test_post_view_in_all_pages(self):
+        post = Post.objects.create(
+                            text='some text',
+                            author=self.test_user,
+                            group=self.new_group,)
+
+        urls = self.get_url(post=post, group=post.group, user=post.author)
+        for url in urls:
+            self.requests_and_checks(
+                                    url=url,
+                                    group=post.group,
+                                    user=post.author,
+                                    text=post.text)
 
     def test_post_edit_auth_user(self):
         post = Post.objects.create(
@@ -82,25 +111,26 @@ class Test(TestCase):
                                      slug='changed_group',
                                      description='changed_description')
 
-        data = {'text': 'edit text', 'group': group.id}
+        data = {'text': 'changed_text', 'group': group.id}
 
-        response = self.client.post(reverse('post_edit', kwargs={
+        self.client.post(
+                        reverse('post_edit', kwargs={
                                 'username': post.author.username,
-                                'post_id': post.id}),
-                                 data, follow=True)
+                                'post_id': post.id}), data, follow=True)
 
-        post.refresh_from_db()
+        post = Post.objects.get(id=post.id)
 
-        urls = self.get_url(post=post, group=group)
+        urls = self.get_url(post=post, group=post.group, user=post.author)
         for url in urls:
-            self.assertContains(response, post.text,
-                                msg_prefix='post text changed')
+            self.requests_and_checks(
+                                    url=url,
+                                    group=post.group,
+                                    user=post.author,
+                                    text=post.text)
 
-            self.assertContains(response, post.author,
-                                msg_prefix='post author changed')
+        response = self.client.get(reverse('group_posts', kwargs={
+                                            'slug': self.new_group.slug}))
 
-        response = self.client.get(reverse('group_posts',
-                                   kwargs={'slug': group.slug}))
-
-        self.assertContains(response, post.group,
-                            msg_prefix='post group changed')
+        self.assertNotEqual(response.context['group'],
+                            post.group,
+                            msg='check change group faled')

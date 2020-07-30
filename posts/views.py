@@ -7,7 +7,7 @@ from .forms import PostForm
 
 
 def index(request):
-    post_list = Post.objects.order_by('-pub_date').all()
+    post_list = Post.objects.all()
     paginator = Paginator(post_list, 10)
     page_number = request.GET.get('page')
     page = paginator.get_page(page_number)
@@ -20,7 +20,7 @@ def index(request):
 
 def group_posts(request, slug):
     group = get_object_or_404(Group, slug=slug)
-    posts = group.posts.all()[:12]
+    posts = group.posts.all()
 
     paginator = Paginator(posts, 10)
     page_number = request.GET.get('page')
@@ -34,37 +34,27 @@ def group_posts(request, slug):
 @login_required
 def new_post(request):
 
-    if request.method == "POST":
-        form = PostForm(request.POST)
-
-        if form.is_valid():
-            post = form.save(commit=False)
-            post.author = request.user
-            post.save()
-            return redirect("index")
-        return render(request, 'new.html', {'form': form})
-
-    form = PostForm()
+    form = PostForm(request.POST or None)
+    if form.is_valid():
+        post = form.save(commit=False)
+        post.author = request.user
+        post.save()
+        return redirect("index")
     return render(request, 'new.html', {'form': form})
 
 
+@login_required
 def post_edit(request, username, post_id):
     edit_flag = True
     post = get_object_or_404(Post, id=post_id)
 
-    if request.method == "POST":
-        form = PostForm(request.POST, instance=post)
+    form = PostForm(request.POST or None, instance=post)
 
-        if form.is_valid():
-            post = form.save(commit=False)
-            post.author = request.user
-            post.save()
-            return redirect("post", username=username, post_id=post_id)
-        return render("new.html", {'form': form,
-                                   'edit_flag': edit_flag,
-                                   'post': post})
-
-    form = PostForm(instance=post)
+    if form.is_valid():
+        post = form.save(commit=False)
+        post.author = request.user
+        post.save()
+        return redirect("post", username=username, post_id=post_id)
 
     return render(request, 'new.html', {'form': form,
                                         'edit_flag': edit_flag,
@@ -72,19 +62,19 @@ def post_edit(request, username, post_id):
 
 
 def profile(request, username):
-    author_name = get_object_or_404(User, username=username)
-    full_author_name = author_name.get_full_name()
-    post_user = Post.objects.filter(author=author_name)
-    posts_count = len(post_user)
-    post = post_user.order_by('pub_date').last()
+    author = get_object_or_404(User, username=username)
+    full_author_name = author.get_full_name()
+    post_user = author.posts.all()
+    posts_count = post_user.count()
+    post = post_user.last()
 
-    post_list = post_user.order_by('-pub_date').all()
+    post_list = post_user.all()
     paginator = Paginator(post_list, 10)
     page_number = request.GET.get('page')
     page = paginator.get_page(page_number)
 
     return render(request, 'profile.html', {
-                            'author_name': author_name,
+                            'author': author,
                             'full_author_name': full_author_name,
                             'post_user': post_user,
                             'posts_count': posts_count,
@@ -95,16 +85,16 @@ def profile(request, username):
 
 
 def post_view(request, username, post_id):
-    author_name = get_object_or_404(User, username=username)
-    full_author_name = author_name.get_full_name()
-    post_user = Post.objects.filter(author=author_name)
-    posts_count = len(post_user)
+    author = get_object_or_404(User, username=username)
+    full_author_name = author.get_full_name()
+    post_user = author.posts.all()
+    posts_count = post_user.count()
 
     post = Post.objects.get(id=post_id)
     pub_date = post.pub_date
 
     return render(request, 'post.html', {
-                                        'author_name': author_name,
+                                        'author': author,
                                         'full_author_name': full_author_name,
                                         'post_user': post_user,
                                         'posts_count': posts_count,
