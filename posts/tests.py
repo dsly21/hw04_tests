@@ -60,7 +60,7 @@ class Test(TestCase):
         self.assertEqual(response.status_code, 200, msg='redirect check')
 
         post = Post.objects.all()
-        self.assertEqual(len(post), 1, msg='count posts > 1')
+        self.assertEqual(post.count(), 1, msg='count posts > 1')
         post = Post.objects.first()
 
         urls = self.get_url(post=post, group=post.group, user=post.author)
@@ -84,7 +84,7 @@ class Test(TestCase):
                              msg_prefix='redirect user failed')
 
         post = Post.objects.all()
-        self.assertEqual(len(post), 0, msg='post created')
+        self.assertEqual(post.count(), 0, msg='post created')
 
     def test_post_view_in_all_pages(self):
         post = Post.objects.create(

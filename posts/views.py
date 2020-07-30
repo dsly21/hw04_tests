@@ -51,9 +51,7 @@ def post_edit(request, username, post_id):
     form = PostForm(request.POST or None, instance=post)
 
     if form.is_valid():
-        post = form.save(commit=False)
-        post.author = request.user
-        post.save()
+        form.save()
         return redirect("post", username=username, post_id=post_id)
 
     return render(request, 'new.html', {'form': form,
@@ -63,41 +61,29 @@ def post_edit(request, username, post_id):
 
 def profile(request, username):
     author = get_object_or_404(User, username=username)
-    full_author_name = author.get_full_name()
     post_user = author.posts.all()
     posts_count = post_user.count()
-    post = post_user.last()
 
-    post_list = post_user.all()
-    paginator = Paginator(post_list, 10)
+    paginator = Paginator(post_user, 10)
     page_number = request.GET.get('page')
     page = paginator.get_page(page_number)
 
     return render(request, 'profile.html', {
                             'author': author,
-                            'full_author_name': full_author_name,
-                            'post_user': post_user,
                             'posts_count': posts_count,
                             'page': page,
                             'paginator': paginator,
-                            'post': post,
     })
 
 
 def post_view(request, username, post_id):
     author = get_object_or_404(User, username=username)
-    full_author_name = author.get_full_name()
-    post_user = author.posts.all()
-    posts_count = post_user.count()
-
-    post = Post.objects.get(id=post_id)
-    pub_date = post.pub_date
+    post = get_object_or_404(Post, id=post_id, author__username=username)
+    post_list = post.author.posts.all()
+    posts_count = post_list.count()
 
     return render(request, 'post.html', {
-                                        'author': author,
-                                        'full_author_name': full_author_name,
-                                        'post_user': post_user,
                                         'posts_count': posts_count,
                                         'post': post,
-                                        'pub_date': pub_date,
+                                        'author': author,
     })
