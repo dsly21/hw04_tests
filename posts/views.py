@@ -77,7 +77,6 @@ def profile(request, username):
 
 
 def post_view(request, username, post_id):
-    author = get_object_or_404(User, username=username)
     post = get_object_or_404(Post, id=post_id, author__username=username)
     post_list = post.author.posts.all()
     posts_count = post_list.count()
@@ -85,5 +84,4 @@ def post_view(request, username, post_id):
     return render(request, 'post.html', {
                                         'posts_count': posts_count,
                                         'post': post,
-                                        'author': author,
     })
